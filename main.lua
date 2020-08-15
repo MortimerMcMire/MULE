@@ -1,38 +1,61 @@
 --[[
-	Mod Initialization: Mort's Character Development
+	Mod Initialization: Mort's Ultimate Leveling Experience
+	v1.7
 
-	GCD 2.0
+	Take the load off of leveling and let your pal mort do the work
 ]] --
 
 -- Ensure that the player has the necessary MWSE version.
-if (mwse.buildDate == nil or mwse.buildDate < 20181231) then
-	mwse.log("[MCD] Build date of %s does not meet minimum build date of 20181231.", mwse.buildDate)
+if (mwse.buildDate == nil or mwse.buildDate < 20191220) then
+	mwse.log("[MULE] Build date of %s does not meet minimum build date of 20191220.", mwse.buildDate)
 	event.register(
 		"initialized",
 		function()
-			tes3.messageBox("MCD requires a newer version of MWSE. Please run MWSE-Update.exe.")
+			tes3.messageBox("MULE requires a newer version of MWSE. Please run MWSE-Update.exe.")
 		end
 	)
 	return
 end
 
--- The default configuration values.
-local defaultConfig = {
-	modDisabled = false,
-	miscSkillsRaised = 0
+local configPath = "mortLeveling.config"
+local config = mwse.loadConfig("mortLeveling") or {
+    majorSkillRate = 50,
+    minorSkillRate = 50,
+    modEnabled = true,
+    attributeMaximum = 200,
+	luckPerLevel = 10,
+    acrobaticsMod = 50,
+    miscSkillThreshold=30,
+    alternateHealthSystem=true,
+    minorSkillThreshold=0,
+    miscLevelThreshold=3,
+    miscSkillRate=30,
+    majorSkillThreshold=0,
+	flatHealthPerLevel = 5,
 }
 
--- Load our config file, and fill in default values for missing elements.
-local config = mwse.loadConfig("MCD")
-if (config == nil) then
-	config = defaultConfig
-else
-	for k, v in pairs(defaultConfig) do
-		if (config[k] == nil) then
-			config[k] = v
-		end
-	end
-end
+local levelUpMessage = {
+	[2] = "You realize that all your life you have been coasting along as if you were in a dream. Suddenly, facing the trials of the last few days, you have come alive.",
+	[3] = "You realize that you are catching on to the secret of success. It's just a matter of concentration.",
+	[4] = "It's all suddenly obvious to you. You just have to concentrate. All the energy and time you've wasted -- it's a sin. But without the experience you've gained, taking risks, taking responsibility for failure, how could you have understood?",
+	[5] = "Everything you do is just a bit easier, more instinctive, more satisfying. It is as though you had suddenly developed keen senses and instincts.",
+	[6] = "You sense yourself more aware, more open to new ideas. You've learned a lot about Morrowind. It's hard to believe how ignorant you were -- but now you have so much more to learn.",
+	[7] = "You resolve to continue pushing yourself. Perhaps there's more to you than you thought.",
+	[8] = "The secret does seem to be hard work, yes, but it's also a kind of blind passion, an inspiration.",
+	[9] = "Everything you do is just a bit easier, more instinctive, more satisfying. It is as though you had suddenly developed keen senses and instincts.",
+	[10] = "You woke today with a new sense of purpose. You're no longer afraid of failure. Failure is just an opportunity to learn something new.",
+	[11] = "Being smart doesn't hurt. And a little luck now and then is nice. But the key is patience and hard work. And when it pays off, it's SWEET!",
+	[12] = "You can't believe how easy it is. You just have to go -- a little crazy. And then, suddenly, it all makes sense, and everything you do turns to gold.",
+	[13] = "It's the most amazing thing. Yesterday it was hard, and today it is easy. Just a good night's sleep, and yesterday's mysteries are today's masteries.",
+	[14] = "Today you wake up, full of energy and ideas, and you know, somehow, that overnight everything has changed. What a difference a day makes.",
+	[15] = "Today you suddenly realized the life you've been living, the punishment your body has taken -- there are limits to what the body can do, and perhaps you have reached them. You've wondered what it is like to grow old. Well, now you know.",
+	[16] = "You've been trying too hard, thinking too much. Relax. Trust your instincts. Just be yourself. Do the little things, and the big things take care of themselves.",
+	[17] = "Life isn't over. You can still get smarter, or cleverer, or more experienced, or meaner -- but your body and soul just aren't going to get any younger.",
+	[18] = "The challenge now is to stay at the peak as long as you can. You may be as strong today as any mortal who has ever walked the earth, but there's always someone younger, a new challenger.",
+	[19] = "You're really good. Maybe the best. And that's why it's so hard to get better. But you just keep trying, because that's the way you are.",
+	[20] = "You'll never be better than you are today. If you are lucky, by superhuman effort, you can avoid slipping backwards for a while. But sooner or later, you're going to lose a step, or drop a beat, or miss a detail -- and you'll be gone forever.",
+	[21] = "The results of hard work and dedication always look like luck to saps. But you know you've earned every ounce of your success."
+	}
 
 local function setLevel(ref, lvl)
     mwscript.setLevel{reference=ref, level=lvl}
@@ -44,34 +67,108 @@ local function setLevel(ref, lvl)
     end
 end
 
-local function incrementSkill(skill)
-	if skill == 20 or skill == 1 or skill == 6 or skill == 4 or skill == 5 then --strength
-		tes3.modStatistic{reference=tes3.player,attribute=0,value=1}
+local function incrementSkill(skill,amount)
+	local path = tes3.player.data.mortLeveling
+	
+	if skill == 1 or skill == 4 or skill == 5 or skill == 6 then --strength
+		path.strengthProgress = (path.strengthProgress + amount)
+		if path.strengthProgress >= 1.0 and tes3.mobilePlayer.strength.base < config.attributeMaximum then
+			path.strengthProgress = (path.strengthProgress - 1)
+			tes3.modStatistic{reference=tes3.player,attribute=0,value=1}
+			tes3.messageBox("Your strength has improved.")
+		end
+	elseif skill == 20 then --acrobatics special case
+		path.strengthProgress = (path.strengthProgress + (config.acrobaticsMod*0.01)*amount)
+		if path.strengthProgress >= 1.0 and tes3.mobilePlayer.strength.base < config.attributeMaximum then
+			path.strengthProgress = (path.strengthProgress - 1)
+			tes3.modStatistic{reference=tes3.player,attribute=0,value=1}
+			tes3.messageBox("Your strength has improved.")
+		end
 	elseif skill == 16 or skill == 13 or skill == 9 or skill == 18 then --intelligence
-		tes3.modStatistic{reference=tes3.player,attribute=1,value=1}
+		path.intelligenceProgress = (path.intelligenceProgress + amount)
+		if path.intelligenceProgress >= 1.0 and tes3.mobilePlayer.intelligence.base < config.attributeMaximum then
+			path.intelligenceProgress = (path.intelligenceProgress - 1)
+			tes3.modStatistic{reference=tes3.player,attribute=1,value=1}
+			tes3.messageBox("Your intelligence has improved.")
+		end
 	elseif skill == 11 or skill == 10 or skill == 14 or skill == 15 then --willpower
-		tes3.modStatistic{reference=tes3.player,attribute=2,value=1}
+		path.willpowerProgress = (path.willpowerProgress + amount)
+		if path.willpowerProgress >= 1.0 and tes3.mobilePlayer.willpower.base < config.attributeMaximum  then
+			path.willpowerProgress = (path.willpowerProgress - 1)
+			tes3.modStatistic{reference=tes3.player,attribute=2,value=1}
+			tes3.messageBox("Your willpower has improved.")
+		end
 	elseif skill == 0 or skill == 21 or skill == 23 or skill == 19 then --agility
-		tes3.modStatistic{reference=tes3.player,attribute=3,value=1}
+		path.agilityProgress = (path.agilityProgress + amount)
+		if path.agilityProgress >= 1.0 and tes3.mobilePlayer.agility.base < config.attributeMaximum then
+			path.agilityProgress = (path.agilityProgress - 1)
+			tes3.modStatistic{reference=tes3.player,attribute=3,value=1}
+			tes3.messageBox("Your agility has improved.")
+		end
 	elseif skill == 8 or skill == 26 or skill == 22 or skill == 17 then --speed
-		tes3.modStatistic{reference=tes3.player,attribute=4,value=1}
+		path.speedProgress = (path.speedProgress + amount)
+		if path.speedProgress >= 1.0 and tes3.mobilePlayer.speed.base < config.attributeMaximum then
+			path.speedProgress = (path.speedProgress - 1)
+			tes3.modStatistic{reference=tes3.player,attribute=4,value=1}
+			tes3.messageBox("Your speed has improved.")
+		end
 	elseif skill == 3 or skill == 2 or skill == 7 then --endurance
-		tes3.modStatistic{reference=tes3.player,attribute=5,value=1}
+		path.enduranceProgress = (path.enduranceProgress + amount)
+		if path.enduranceProgress >= 1.0 and tes3.mobilePlayer.endurance.base < config.attributeMaximum then
+			path.enduranceProgress = (path.enduranceProgress - 1)
+			tes3.modStatistic{reference=tes3.player,attribute=5,value=1}
+			tes3.messageBox("Your endurance has improved.")
+			if config.alternateHealthSystem == true then
+				local healthGain = 2
+				if config.healthPerEndurance ~= nil then
+					healthGain = config.healthPerEndurance
+				end
+				tes3.modStatistic{reference=tes3.player,name='health',value=healthGain}
+			end
+		end
 	elseif skill == 12 or skill == 24 or skill == 25 then --personality
-		tes3.modStatistic{reference=tes3.player,attribute=6,value=1}
-	end	
+		path.personalityProgress = (path.personalityProgress + amount)
+		if path.personalityProgress >= 1.0 and tes3.mobilePlayer.personality.base < config.attributeMaximum then
+			path.personalityProgress = (path.personalityProgress - 1)
+			tes3.modStatistic{reference=tes3.player,attribute=6,value=1}
+			tes3.messageBox("Your personality has improved.")
+		end
+	elseif skill == 777 then --luck
+		path.luckProgress = (path.luckProgress + amount)
+		if path.luckProgress >= 1.0 and tes3.mobilePlayer.luck.base < config.attributeMaximum then
+			path.luckProgress = (path.luckProgress - 1)
+			tes3.modStatistic{reference=tes3.player,attribute=7,value=1}
+			--tes3.messageBox("Your luck has improved.")
+		end	
+	end
 	--add support for custom skills?
 end
 
 local function onSkillUp(e)
-	if config.modDisabled == true then
-		return(e)
+	if config.modEnabled == false then
+		return
 	end
+	
+	local path = tes3.player.data.mortLeveling
 	local class = tes3.player.object.class
 	local majors = class.majorSkills
 	local minors = class.minorSkills
-	local threshold = 9 --9 for major/minor 10 for misc, this affects how many skills levels you up
+	local threshold = 9 --9 for major/minor, 10 for misc, this affects how many skills levels you up
 	local skillType = "misc"
+	
+	if path == nil then
+		tes3.player.data.mortLeveling = {}
+		path = tes3.player.data.mortLeveling
+		path.strengthProgress = 0
+		path.enduranceProgress = 0
+		path.intelligenceProgress = 0
+		path.willpowerProgress = 0
+		path.luckProgress = 0
+		path.speedProgress = 0
+		path.agilityProgress = 0
+		path.personalityProgress = 0
+		path.miscSkillsRaised = 0
+	end
 	
 	for _,skill in pairs(majors) do
 		if skill == e.skill then
@@ -85,25 +182,25 @@ local function onSkillUp(e)
 		end
 	end
 	
-	--major and minor treated the same...for now
-	--1 stat every 2 levels
-	if (skillType == "major") and (e.level >= 0) and (e.level % 2 == 0 ) then
-		incrementSkill(e.skill)
-	elseif (skillType == "minor") and (e.level >= 0) and (e.level % 2 == 0 ) then
-		incrementSkill(e.skill)
-	--misc only give stats over 30, major/minor at 20
-	elseif (skillType == "misc") and (e.level >= 30) and (e.level % 2 == 0 ) then
-		incrementSkill(e.skill)
+	if (skillType == "major") and (e.level >= config.majorSkillThreshold) then 
+		local skillRate = config.majorSkillRate * 0.01
+		incrementSkill(e.skill,skillRate)
+	elseif (skillType == "minor") and (e.level >= config.minorSkillThreshold) then
+		local skillRate = config.minorSkillRate * 0.01
+		incrementSkill(e.skill,skillRate)
+	elseif (skillType == "misc") and (e.level >= config.miscSkillThreshold) then
+		local skillRate = config.miscSkillRate * 0.01
+		incrementSkill(e.skill,skillRate)
 	end
 	
-	--3 misc stats gives you a level point
 	if skillType == "misc" then
-		config.miscSkillsRaised = config.miscSkillsRaised + 1
-		if config.miscSkillsRaised >= 3 then
-			config.miscSkillsRaised = 0
-			tes3.mobilePlayer.levelUpProgress = tes3.mobilePlayer.levelUpProgress + 1
+		path.miscSkillsRaised = path.miscSkillsRaised + 1
+		if path.miscSkillsRaised >= config.miscLevelThreshold then
+			path.miscSkillsRaised = 0
+			if config.miscLevelThreshold ~= 0 then
+				tes3.mobilePlayer.levelUpProgress = tes3.mobilePlayer.levelUpProgress + 1
+			end
 		end
-		mwse.saveConfig("MCD", config)
 	end
 	
 	if skillType == "major" or skillType == "minor" then
@@ -112,233 +209,181 @@ local function onSkillUp(e)
 		threshold = 10
 	end
 	
+	if tes3.mobilePlayer.levelUpProgress > 200 then
+		tes3.mobilePlayer.levelUpProgress = 0
+	end
+	
 	if tes3.mobilePlayer.levelUpProgress >= threshold then
-		tes3.mobilePlayer.levelUpProgress = -1
+		local healthToAdd = 5
+		if config.flatHealthPerLevel ~= nil then
+			healthToAdd = config.flatHealthPerLevel
+		end
+		
+		if skillType == "misc" then
+			tes3.mobilePlayer.levelUpProgress = 0
+		else
+			if e.source == "training" then
+				tes3.mobilePlayer.levelUpProgress = -1
+			else
+				tes3.mobilePlayer.levelUpProgress = 0
+			end
+		end
+		
 		local next_level = (tes3.player.object.level + 1)
 		setLevel(tes3.player, next_level)
-		tes3.modStatistic{reference=tes3.player,attribute=7,value=1}
+		tes3.messageBox("You have gained an additional level.")
+		if (next_level > 21) then
+			next_level = 21
+		end
+		tes3.messageBox(levelUpMessage[next_level])
+		tes3.streamMusic{path="Special/MW_Triumph.mp3"}
+		
+		--add luck per level
+		local luckProgressToAdd = 0.1 * config.luckPerLevel
+		incrementSkill(777,luckProgressToAdd)
+		
+		if config.alternateHealthSystem == false then
+			local healthMultiplier = tes3.findGMST(1035)
+			healthToAdd = (healthMultiplier.value * tes3.mobilePlayer.endurance.base)
+		end
+		tes3.modStatistic{reference=tes3.player,name='health',value=healthToAdd}
 	end
 end
 
+-- local function changeEndurance(e)
+	-- if config.stateBasedHealth ~= false then
+		-- local healthTotal = (((tes3.mobilePlayer.strength.current + tes3.mobilePlayer.endurance.current) / 2)
+							-- + ((tes3.mobilePlayer.endurance.current / 10) * (tes3.player.object.level - 1)))
+							
+		-- if tes3.player.object.health > healthTotal then
+			-- tes3.setStatistic{reference=tes3.player,name='health',current=healthTotal}
+		-- end
+		-- tes3.setStatistic{reference=tes3.player,name='health',base=healthTotal}
+		-- tes3.modStatistic{reference=tes3.player,name='health',value=0}
+		-- --refreshHealthUI()
+	-- end
+-- end
+
 local function onInitialized()
-	event.register("skillRaised", onSkillUp)
-	mwse.log("[mcd] Initialized.")
+	event.register("skillRaised", onSkillUp, {priority = 3000})
+	--event.register("simulate", changeEndurance)
+	mwse.log("[MULE] Initialized.")
 end
 event.register("initialized", onInitialized)
-
 
 ---
 --- Mod Config
 ---
-local modConfig = {}
 
-local function toggleMessageBox(e)
-	config.showMessageBox = not config.showMessageBox
-	local button = e.source
-	button.text = config.showMessageBox and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value
+local function createplayerVar(id, default)
+	return mwse.mcm.createPlayerData{
+		id = id,
+		path = "mortLeveling",
+		defaultSetting = default
+	}  
 end
 
-local function toggleHideTrapped(e)
-	config.hideTrapped = not config.hideTrapped
-	local button = e.source
-	button.text = config.hideTrapped and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value
-end
-
-local function toggleShowPlants(e)
-	config.showPlants = not config.showPlants
-	local button = e.source
-	button.text = config.showPlants and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value
-end
-
-local function toggleScriptedContainers(e)
-	config.showScripted = not config.showScripted
-	local button = e.source
-	button.text = config.showScripted and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value
-end
-
-local function toggleConfirmLock(e)
-	config.hideLocked = not config.hideLocked
-	local button = e.source
-	button.text = config.hideLocked and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value
-end
-
-function modConfig.onCreate(container)
-	local mainBlock = container:createThinBorder({})
-	mainBlock.flowDirection = "top_to_bottom"
-	mainBlock.layoutWidthFraction = 1.0
-	mainBlock.layoutHeightFraction = 1.0
-	mainBlock.paddingAllSides = 6
-	
-	-- do
-		-- local hBlockOne = mainBlock:createBlock({})
-		-- hBlockOne.flowDirection = "left_to_right"
-		-- hBlockOne.layoutWidthFraction = 1.0
-		-- hBlockOne.autoHeight = true
-	
-		-- local labelOne = hBlockOne:createLabel({ text = "Display messagebox on loot?" })
-		-- labelOne.layoutOriginFractionX = 0.0
-
-		-- local buttonOne = hBlockOne:createButton({ text = (config.showMessageBox and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value) })
-		-- buttonOne.layoutOriginFractionX = 1.0
-		-- buttonOne.paddingTop = 3
-		-- buttonOne:register("mouseClick", toggleMessageBox)	
-	-- end
-	-- do
-		-- local hBlockTwo = mainBlock:createBlock({})
-		-- hBlockTwo.flowDirection = "left_to_right"
-		-- hBlockTwo.layoutWidthFraction = 1.0
-		-- hBlockTwo.autoHeight = true
-	
-		-- local labelTwo = hBlockTwo:createLabel({ text = "Hide trapped containers items? (False will show you the items but trigger the trap if you attempt to take one) " })
-		-- labelTwo.layoutOriginFractionX = 0.0
-
-		-- local buttonTwo = hBlockTwo:createButton({ text = (config.hideTrapped and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value) })
-		-- buttonTwo.layoutOriginFractionX = 1.0
-		-- buttonTwo.paddingTop = 3
-		-- buttonTwo:register("mouseClick", toggleHideTrapped)
-	-- end
-	-- do
-		-- local hBlockThree = mainBlock:createBlock({})
-		-- hBlockThree.flowDirection = "left_to_right"
-		-- hBlockThree.layoutWidthFraction = 1.0
-		-- hBlockThree.autoHeight = true
-	
-		-- local labelThree = hBlockThree:createLabel({ text = "Hide lock status? (False will display Locked when chests are locked and nothing when set to true) " })
-		-- labelThree.layoutOriginFractionX = 0.0
-
-		-- local buttonThree = hBlockThree:createButton({ text = (config.hideLocked and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value) })
-		-- buttonThree.layoutOriginFractionX = 1.0
-		-- buttonThree.paddingTop = 3
-		-- buttonThree:register("mouseClick", toggleConfirmLock)
-	-- end
-	-- do
-		-- local hBlockFour = mainBlock:createBlock({})
-		-- hBlockFour.flowDirection = "left_to_right"
-		-- hBlockFour.layoutWidthFraction = 1.0
-		-- hBlockFour.autoHeight = true
-	
-		-- local labelFour = hBlockFour:createLabel({ text = "Show quickloot menu on plant / organic containers? " })
-		-- labelFour.layoutOriginFractionX = 0.0
-
-		-- local buttonFour = hBlockFour:createButton({ text = (config.showPlants and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value) })
-		-- buttonFour.layoutOriginFractionX = 1.0
-		-- buttonFour.paddingTop = 3
-		-- buttonFour:register("mouseClick", toggleShowPlants)
-	-- end
-	-- do
-		-- local hBlockFive = mainBlock:createBlock({})
-		-- hBlockFive.flowDirection = "left_to_right"
-		-- hBlockFive.layoutWidthFraction = 1.0
-		-- hBlockFive.autoHeight = true
-	
-		-- local labelFive = hBlockFive:createLabel({ text = "Show containers with scripted onActivate? (Can break some container scripts) " })
-		-- labelFive.layoutOriginFractionX = 0.0
-
-		-- local buttonFive = hBlockFive:createButton({ text = (config.showScripted and tes3.findGMST(tes3.gmst.sYes).value or tes3.findGMST(tes3.gmst.sNo).value) })
-		-- buttonFive.layoutOriginFractionX = 1.0
-		-- buttonFive.paddingTop = 3
-		-- buttonFive:register("mouseClick", toggleScriptedContainers)
-	-- end
-	-- do
-		-- local hBlockSix = mainBlock:createBlock({})
-		-- hBlockSix.flowDirection = "left_to_right"
-		-- hBlockSix.layoutWidthFraction = 1.0
-		-- hBlockSix.autoHeight = true
-	
-		-- local labelNumberDisplayed = hBlockSix:createLabel({ text = "Number of items displayed by default: " .. tostring(config.maxItemDisplaySize+1) })
-		-- labelNumberDisplayed.layoutOriginFractionX = 0.0
-		
-		-- local sliderNumberDisplayed = hBlockSix:createSlider({ current = config.maxItemDisplaySize-4, max = 25, min = 4, jump = 2})
-		-- sliderNumberDisplayed.layoutOriginFractionX = 1.0
-		-- sliderNumberDisplayed.width = 300
-		-- sliderNumberDisplayed:register("PartScrollBar_changed", function(e)
-			-- local slider = e.source
-			-- config.maxItemDisplaySize = (slider.widget.current + 4)
-			-- labelNumberDisplayed.text = "Number of items displayed by default: " .. tostring(config.maxItemDisplaySize+1)
-			-- end)
-	-- end
-	-- do
-		-- local hBlockSeven = mainBlock:createBlock({})
-		-- hBlockSeven.flowDirection = "left_to_right"
-		-- hBlockSeven.layoutWidthFraction = 1.0
-		-- hBlockSeven.autoHeight = true
-	
-		-- local labelXPosition = hBlockSeven:createLabel({ text = "Menu X position (higher = right): " .. tostring(config.menuX) })
-		-- labelXPosition.layoutOriginFractionX = 0.0
-		
-		-- local sliderXPosition = hBlockSeven:createSlider({ current = config.menuX, max = 10, jump = 1 })
-		-- sliderXPosition.layoutOriginFractionX = 1.0
-		-- sliderXPosition.width = 300
-		-- sliderXPosition:register("PartScrollBar_changed", function(e)
-			-- local slider = e.source
-			-- config.menuX = slider.widget.current
-			-- labelXPosition.text = "Menu X position (higher = right): " .. tostring(config.menuX)
-			-- end)
-	-- end
-	-- do
-		-- local hBlockEight = mainBlock:createBlock({})
-		-- hBlockEight.flowDirection = "left_to_right"
-		-- hBlockEight.layoutWidthFraction = 1.0
-		-- hBlockEight.autoHeight = true
-	
-		-- local labelYPosition = hBlockEight:createLabel({ text = "Menu Y position (higher = down): " .. tostring(config.menuY) })
-		-- labelYPosition.layoutOriginFractionX = 0.0
-		
-		-- local sliderYPosition = hBlockEight:createSlider({ current = config.menuY, max = 10, jump = 1 })
-		-- sliderYPosition.layoutOriginFractionX = 1.0
-		-- sliderYPosition.width = 300
-		-- sliderYPosition:register("PartScrollBar_changed", function(e)
-			-- local slider = e.source
-			-- config.menuY = slider.widget.current
-			-- labelYPosition.text = "Menu Y position (higher = down): " .. tostring(config.menuY)
-			-- end)
-	-- end
-	do
-		local spacerBlock = mainBlock:createBlock({})
-		spacerBlock.layoutWidthFraction = 1.0
-		spacerBlock.paddingAllSides = 10
-		spacerBlock.layoutHeightFraction = 1.0
-		spacerBlock.flowDirection = "top_to_bottom"
-
-		local buttonRestoreDefaults = spacerBlock:createButton({ text = "Restore Defaults" })
-		buttonRestoreDefaults.layoutOriginFractionX = 0.2
-		buttonRestoreDefaults.layoutOriginFractionY = 0.1
-		buttonRestoreDefaults.paddingTop = 3
-		buttonRestoreDefaults:register("mouseClick", function(e)
-			for k, v in pairs(default) do
-				config[k] = default[k]
-			end
-			mainBlock:destroy()
-			modConfig.onCreate(container)
-		end)
-		
-		local buttonEnableMCD = spacerBlock:createButton()
-		if config.modDisabled == true then
-			buttonEnableMCD.text = "Enable MCD? Current: No"
-		else
-			buttonEnableMCD.text = "Enable MCD? Current: Yes"
-		end
-		buttonEnableMCD.layoutOriginFractionX = 0.7
-		buttonEnableMCD.layoutOriginFractionY = 0.1
-		buttonEnableMCD.paddingTop = 3
-		buttonEnableMCD:register("mouseClick", function(e)
-			if config.modDisabled == true then
-				buttonEnableMCD.text = "Enable MCD? Current: Yes"
-				config.modDisabled = false
-			else
-				buttonEnableMCD.text = "Enable MCD? Current: No"
-				config.modDisabled = true
-			end
-		end)
-	end
-end
-
-function modConfig.onClose(container)
-	mwse.log("[MCD] Saving mod configuration")
-	mwse.saveConfig("MCD", config)
+local function createtableVar(id)
+	return mwse.mcm.createTableVariable{
+		id = id,
+		table = config
+	}  
 end
 
 local function registerModConfig()
-    mwse.registerModConfig("Mort's Character Development", modConfig)
+    local template = mwse.mcm.createTemplate("MULE")
+	template:saveOnClose("mortLeveling", config)
+	
+	
+    local page = template:createPage()
+    local categoryMain = page:createCategory("Settings")
+    categoryMain:createYesNoButton{ label = "Enable MULE",
+								variable = createtableVar("modEnabled"),
+								defaultSetting = true}
+								
+	categoryMain:createYesNoButton{ label = "Use alternative flatrate HP gain system?", 
+								variable = createtableVar("alternateHealthSystem"),
+								defaultSetting = true}
+								
+	-- categoryMain:createYesNoButton{ label = "[Experimental] State-based Health? Overrides above setting!", 
+								-- variable = createtableVar("stateBasedHealth"),
+								-- defaultSetting = false}
+								
+	categoryMain:createSlider{ label = "Attribute Maximum",
+							variable = createtableVar("attributeMaximum"),
+							max = 500,
+							jump = 10,
+							defaultSetting = 200}
+							
+	categoryMain:createSlider{ label = "Luck gain per level (*0.1)",
+							variable = createtableVar("luckPerLevel"),
+							max = 20,
+							defaultSetting = 10}
+							
+	categoryMain:createSlider{ label = "Health Per Level (using flatrate HP gain system)",
+							variable = createtableVar("flatHealthPerLevel"),
+							max = 10,
+							defaultSetting = 5}
+							
+	categoryMain:createSlider{ label = "Health Per Endurance gain (using flatrate HP gain system)",
+						variable = createtableVar("healthPerEndurance"),
+						max = 10,
+						defaultSetting = 2}
+								
+	local categoryMajor = page:createCategory("Major Skills")
+								
+	categoryMajor:createSlider{ label = "Percentage of attribute point to gain from major skill (default 50%)",
+							variable = createtableVar("majorSkillRate"),
+							max = 200,
+							jump = 10,
+							defaultSetting = 50}
+							
+	categoryMajor:createSlider{ label = "Minimum level to gain attributes from major skills (default 0)",
+							variable = createtableVar("majorSkillThreshold"),
+							max = 100,
+							jump = 10,
+							defaultSetting = 0}
+							
+	local categoryMinor = page:createCategory("Minor Skills")
+							
+	categoryMinor:createSlider{ label = "Percentage of attribute point to gain from minor skill (default 50%)",
+							variable = createtableVar("minorSkillRate"),
+							max = 200,
+							jump = 10,
+							defaultSetting = 50}
+							
+	categoryMinor:createSlider{ label = "Minimum level to gain attributes from minor skills (default 0)",
+							variable = createtableVar("minorSkillThreshold"),
+							max = 100,
+							jump = 10,
+							defaultSetting = 0}
+							
+	local categoryMisc = page:createCategory("Misc Skills")
+
+	categoryMisc:createSlider{ label = "Percentage of attribute point to gain from misc skill (default 30%)",
+							variable = createtableVar("miscSkillRate"),
+							max = 200,
+							jump = 10,
+							defaultSetting = 30}
+							
+	categoryMisc:createSlider{ label = "Minimum level to gain attributes from misc skills (default 30)",
+							variable = createtableVar("miscSkillThreshold"),
+							max = 100,
+							jump = 10,
+							defaultSetting = 30}
+							
+	categoryMisc:createSlider{ label = "Misc skills required for one level point (default 3)",
+							variable = createtableVar("miscLevelThreshold"),
+							max = 10,
+							defaultSetting = 3}
+							
+	
+	categoryMain:createSlider{ label = "Acrobatics attribute modifier (default 50%)",
+							variable = createtableVar("acrobaticsMod"),
+							max = 100,
+							jump = 10,
+							defaultSetting = 50}
+	
+    mwse.mcm.register(template)
 end
 event.register("modConfigReady", registerModConfig)
