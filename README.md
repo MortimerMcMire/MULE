@@ -1,5 +1,5 @@
 # MULE - Mort's Ultimate Leveling Experience
-Version 1.7
+Version 2.0
 
 A fully customizable leveling mod that removes the level-up screen entirely. Never worry about min/maxing skill ups ever again. The functionality of GCD/MADD, but fully customizable and conflict-free. Play how you want, and leave leveling to the MULE.
 
@@ -30,6 +30,10 @@ MWSE State based health by Necrolesian
 https://www.nexusmods.com/morrowind/mods/48133
 
 Updates:
+v2.0
+-Bugfixes
+-Optional skill decay
+
 v1.7
 -Now includes levelup messages
 -More difficult default leveling (it was a bit *too* easy)
